@@ -1,0 +1,108 @@
+﻿@model Paystation.Models.Transaction
+
+@{
+    ViewBag.Title = "3 Party Paystation iFrame Sample Code";
+}
+
+<br />
+@if (Model == null)
+{
+    <p>Cent values in the amount correspond to the error code that will be returned e.g.</p>
+    <ul style="list-style:none;">
+        <li>.00 - Transaction Successful</li>
+        <li>.51 - Insufficient Funds</li>
+        <li>.54 - Expired Card</li>
+        <li>.57 - Transaction Type Not Supported</li>
+        <li>.75 - Bank Declined Transaction</li>
+        <li>.91 - Error Communicating with Bank</li>
+    </ul>
+
+    <p>Please enter the amount you wish to pay in the space provided below.</p>
+    using (Html.BeginForm("Index", "Home", FormMethod.Post))
+    {
+        <label>Amount ($): <input type="text" name="amount" /></label>
+        <input type="submit" />
+    }
+}
+else
+{
+    <style>
+        .payment_wrapper > iframe {
+            width: 100%;
+            height: 100%;
+            min-width: 640px;
+            min-height: 625px;
+        }
+    </style>
+
+    <p>Test credit cards can be found <a href="http://paystation.co.nz/test-card-numbers" target="_blank">here</a>.</p>
+    <p>Test MasterCard: 5123456789012346</p>
+    <p>Expires: 05/17</p>
+
+    <div id="payment_wrapper" class="payment_wrapper">
+        @if (Model.ErrorCode > 0)
+        {
+            <h1 style="color: red">@Model.ErrorMessage</h1>
+        }
+        else
+        {
+            <iframe src="@Model.DigitalOrderURL"></iframe>
+        }
+    </div>
+
+    <script src="~/Scripts/paystation.js"></script>
+    <script>
+    (function () {
+        var _paymentFrameWrapper = document.getElementById('payment_wrapper');
+        var _paymentFrame = _paymentFrameWrapper.firstElementChild;
+        var _transactionId = '@Model.TransactionID';
+
+        // make sure it isn't an error message
+        if (_paymentFrame.nodeName == 'IFRAME' && _transactionId) {
+            // To check if the transaction is complete, you can one or both of these methods.
+
+            // 1. Poll transaction data and check the status (recommended)
+            Paystation.pollTransactionDetails(_transactionId, onTransactionResponse);
+
+            // 2. Check to see if the iframe has been redirected to a site in the same domain as this page.
+            // This only works if you use redirects after the credit card details are entered and that redirect goes to the same domain as this page is in.
+            // Paystation.bindFrameLoadEvent(_paymentFrame, onFrameLoaded);
+        }
+
+        // This function will get a response every time we poll the website.
+        // Most of these responses will get transaction details for an incomplete transaction while the user is still entering their details in the iframe.
+        function onTransactionResponse(err, transaction) {
+            if (err) {
+                // have some error handling if you want
+            }
+
+            if (transaction && transaction.errorCode > -1) {
+                onTransactionComplete(transaction);
+            }
+        }
+
+        // Remove the iframe and stop polling the transaction details. Show a response to the user.
+        function onTransactionComplete(transaction) {
+            Paystation.closePaymentFrame(_paymentFrame);
+            Paystation.stopPolling();
+
+            // Display the outcome to the user i.e. "Transaction successful" or "Insufficient funds"
+            // You might want to handle these differently depending on the errorCode (transaction.errorCode)
+            _paymentFrameWrapper.innerHTML = '<h1>' + transaction.errorMessage + '</h1>';
+        }
+
+        // Not used by default. For method 2 described above.
+        // This gets called whenever a new page is loaded in the iframe. This is only possible if you are using redirects.
+        function onFrameLoaded(iframe) {
+            // Browsers shouldn't allow access to the content of an iframe unless it is from your own domain.
+            // So, if we can access the content, then the user has been redirected back to your site from paystation.
+            if (Paystation.canAccessIFrame(iframe)) {
+                // We have redirected back to our own site inside the iframe.
+                // It is possible to grab some data from inside the frame, but it is better and often quicker to use polling to get this response as that data can be trusted.
+                Paystation.closePaymentFrame(iframe);
+            }
+        }
+    })();
+    </script>
+}
+
